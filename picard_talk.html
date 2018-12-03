@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Picard Talk</title>
+    <link rel="shortcut icon" type="image/png" href="static/favicon.ico"/>
+    <style>
+        html {
+          box-sizing: border-box;
+        }
+
+        #page_wrapper {
+            width: 70%;
+            margin: 0 auto;
+        }
+
+        #panel {
+
+            margin: 2em auto;
+        }
+
+        #panel input {
+            width: 300px;
+        }
+
+        .entry {
+
+            margin: 0 auto;
+            display: flex;
+            padding: .7em;
+        }
+
+        .entry:nth-child(2n) {
+            background-color: whitesmoke;
+        }
+
+        .meta {
+            display: flex;
+            padding-right: 2em;
+            flex: 0 0 30%;
+            justify-content: left;
+        }
+
+        .meta_episode {
+            flex: 0 0 20%;
+        }
+
+        .lines {
+
+        }
+
+        .line {
+            padding-bottom: 1em;
+            line-height: 1.6em;
+        }
+
+        #chart {
+
+            margin: 2em auto;
+            display: flex;
+            flex-wrap: nowrap;
+        }
+
+        .season {
+            flex-basis: 20%;
+        }
+
+        .season_title {
+            text-align: center;
+        }
+        
+        .cell {
+            width: 18px;
+            height: 18px;
+            background-color: #dbe4e6;
+            color: #dbe4e6;
+            border: 1px solid #FFF;
+            border-collapse: collapse;
+            display: inline-block;
+        }
+
+        .active {
+            background-color: #5d7e87;
+            color: #5d7e87;
+        }
+
+        .episode_detail {
+            width: 190px;
+            height: 60px;
+            padding: 1em;
+            background-color: #efefc5e6;
+        }
+
+        .label {
+            font-size: .8em;
+            padding-bottom: .3em;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="page_wrapper">
+        <header><h1>Picard Talk</h1></header>
+
+        <div id="engage">
+            <section id="panel">
+                <input type="text" v-model="phrase" @keyup.enter="refresh"/>
+                <button v-on:click="refresh">Refresh</button>
+            </section>
+
+            <section id="results">
+                <viz v-bind:phrase_data="phrase_data"
+                     v-bind:all_episodes="episodes"
+                     ref="v1">
+                </viz>
+            </section>
+
+        </div>
+
+        <div id="episode_info" style="position: absolute;"></div>
+    </div>
+    <script src="lib/d3.min.js"></script>
+    <script src="lib/vue.min.js"></script>
+    <script type="text/x-template" id="main">
+        <div>
+            <div id="chart">
+                <div class="season" v-for="(season, i) in all_episodes">
+                    <div class="season_title">Season [[i]]</div>
+                    <div>
+                        <div class="cell" v-for="episode in season"
+                             :class="{active: episodes.indexOf(episode.episode) >= 0}"
+                             :data-episode="episode.episode"
+                             :data-name="episode.name"
+                             :data-airdate="episode.airdate">.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div v-for="(item, index) in phrase_data" class="entry">
+                <div class="meta">
+                    <div class="meta_episode">[[ item.episode_number ]]</div>
+                    <div class="meta_title">[[ item.title ]]</div>
+                </div>
+                <div class="lines">
+                    <div class="line" v-for="line in item.lines">[[ line ]]</div>
+                </div>
+            </div>
+        </div>
+    </script>
+
+    <script>
+        
+        function loadData(callback) {
+            d3.json("picard_lines.json", callback);
+        }
+
+        Vue.component('viz', {
+            template: "#main",
+            delimiters: ['[[',']]'],
+            methods: {
+                loadDetailTemplate(episode_name, episode_number, airdate) {
+                    let template = `
+                        <div class="episode_detail">
+                            <div class="label">${episode_number} - ${airdate}</div>
+                            <div class="label">${episode_name}</div>
+                        </div>`;
+                    return template;
+                }
+            },
+            computed: {
+                episodes() {
+                    return this.phrase_data.map(entry => entry.episode_number);
+                }
+            },
+            mounted() {
+                setTimeout(() => {
+                    let cells = document.getElementsByClassName("cell");
+                    let episode_info = document.getElementById("episode_info");
+                    for (let i = 0; i < cells.length; i++) {
+                        cells[i].addEventListener("mouseover", event => {
+                            let episode_number = event.target.getAttribute("data-episode");
+                            let episode_name = event.target.getAttribute("data-name");
+                            let airdate = event.target.getAttribute("data-airdate");
+                            episode_info.innerHTML = this.loadDetailTemplate(episode_name, episode_number, airdate)
+                            let source_top = event.target.offsetTop;
+                            let source_left = event.target.offsetLeft;
+                            episode_info.style.left = source_left + 27 +"px";
+                            episode_info.style.top = source_top + "px";
+                            episode_info.style.display = "block"
+                        });
+                        cells[i].addEventListener("mouseout", event => {
+                            episode_info.style.display = "none"
+                        });
+                    }
+                }, 1000);
+            },
+            props: ['phrase_data', 'all_episodes']
+        });
+
+        app = new Vue({
+            el: "#engage",
+            delimiters: ['[[',']]'],
+            data() {
+                return {
+                    picard_data: [],
+                    episodes: {},
+                    seasons: [],
+                    phrase: "Make it so",
+                    phrase_data: [],
+                }
+            },
+            methods: {
+                init(){
+                    loadData((error, data) => {
+                        this.picard_data = data;
+                        let total = this.picard_data.reduce((a,b) => a += b.lines.length, 0);
+                        if (this.phrase) {
+                            this.load_phrase();
+                        }
+                        this.picard_data.forEach(entry => {
+                            let season =  entry.season;
+                            let episode = {
+                                episode: entry.episode_number,
+                                name: entry.title,
+                                airdate: entry.air_date
+                            };
+                            if (season in this.episodes) {
+                                this.episodes[season].push(episode);
+                            }
+                            else {
+                                this.episodes[season] = [episode];
+                            }
+                        });
+                        let seasons = this.picard_data.map(obj => obj.season);
+                        this.seasons = seasons.filter((item, index) => seasons.indexOf(item) == index)
+                    });
+
+                },
+                load_phrase() {
+                    let matching_data = this.picard_data.filter(entry => {
+                        return this.lookup_phrase(entry.lines)
+                    });
+                    this.phrase_data = [];
+                    matching_data.forEach(entry => {
+                        let entry_copy = this.deepCopy(entry);
+                        let matched_lines = [];
+                        entry_copy.lines.forEach(line => {
+                            if (line.search(new RegExp(this.phrase, 'gi')) >= 0) {
+                                matched_lines.push(line);
+                            }
+                        });
+                        entry_copy.lines = matched_lines;
+                        this.phrase_data.push(entry_copy)
+                    });
+                },
+                lookup_phrase(lines) {
+                    for (let line of lines) {
+                        if (line.search(new RegExp(this.phrase, 'gi')) >= 0) {
+                            return true;
+                        }
+                    }
+                    return false;
+                },
+                refresh() {
+                    let total = this.picard_data.reduce((a,b) => a += b.lines.length, 0);
+                    this.load_phrase();
+                },
+                deepCopy(obj) {
+                    let new_obj = {};
+                    for (let i in obj) {
+                        if (typeof(Array.isArray(obj[i])) || typeof(obj[i]) != "object" ) {
+                            new_obj[i] = obj[i];
+                        }
+                        else {
+                            new_obj[i] = this.deepCopy(obj[i]);
+                        }
+                    }
+                    return new_obj;
+                }
+            },
+            mounted() {
+                this.init();
+            }
+        });
+        
+    </script>
+</body>
+
+</html>

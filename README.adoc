@@ -1,0 +1,20 @@
+
+Picard Talk
+-----------
+
+Have you ever wondered how many times Captain Picard said "Engage!"?
+
+
+Usage
+-----
+
+Just open with a web broswer.
+
+image::screenshot.png[screenshot]
+
+
+License
+-------
+
+MIT License
+
